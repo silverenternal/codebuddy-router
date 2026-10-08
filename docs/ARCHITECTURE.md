@@ -47,7 +47,9 @@ router (backing it up first), so plain `claude` gets the same setup.
    `systemctl --user reset-failed` + `start codebuddy-router.service`, then waits.
 2. Claude Code reads `~/.claude/settings.json`, whose `env` points `ANTHROPIC_BASE_URL`
    at `http://127.0.0.1:8788` (plain `claude` and `claude-cb` behave the same).
-3. For each request the router reads the `model` field from the JSON body and decides:
+3. For each request the router reads the `model` field from the JSON body,
+   `normalizeModel()` rewrites any known legacy id to a current CodeBuddy id (and the
+   body is re-serialized when it changed), then it decides:
    - `isCodeBuddy(model, cbModels)` → proxy to the gateway (no auth header injected;
      the gateway holds the CodeBuddy key).
    - otherwise → proxy to the fallback base with `Authorization: Bearer <token>`.
@@ -70,6 +72,11 @@ fallback provider's may not be (`MiniMax-M3`), so the two never collide.
 
 `DENY` lists ids the upstream advertises but which error out; `filterCatalog()` drops
 them so they never reach the picker.
+
+Before classification, `normalizeModel()` maps a small set of legacy ids (`ALIASES`)
+to current CodeBuddy ids and strips a trailing `[1m]`-style context suffix. This is what
+keeps a resumed old session — pinned to e.g. `MiniMax-M3` or `deepseek-flash` — on the
+gateway leg instead of the fallback.
 
 ## Picker data flow
 

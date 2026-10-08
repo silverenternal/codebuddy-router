@@ -21,6 +21,7 @@
 - **默认 deepseek**：主模型 / 各档位 / subagent 全部默认 `deepseek-v4.1-flash`，随时可切。
 - **统一选择器**：一个 `/model` 同时列出 CodeBuddy 与 fallback 两族模型。
 - **动态目录**：`/model` 列表由定时器从实时模型目录生成，上游增删模型会自动跟进。
+- **续接老会话不报错**：老会话里记录的旧模型 id（`MiniMax-M3`、`deepseek-flash` 等）会被自动映射到当前 CodeBuddy 模型，`--resume` 不再落到不稳定的 fallback 腿。
 - **稳**：systemd `--user` 常驻、无限重启、崩溃自愈；`claude-cb doctor` 一键体检。
 
 ## 快速开始

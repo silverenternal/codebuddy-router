@@ -43,3 +43,37 @@ export function isCodeBuddy(model, catalog) {
 export function filterCatalog(ids) {
   return [...ids].filter((id) => id && !DENY.has(id));
 }
+
+/**
+ * Legacy / stale model-id aliases → current CodeBuddy ids.
+ *
+ * A Claude Code session records the model it was created with, and `--resume`
+ * replays that id verbatim. Ids from before the router existed are either
+ * retired CodeBuddy ids (`deepseek-flash`) or fallback-provider ids
+ * (`MiniMax-M3*`) that would otherwise hit the less reliable fallback leg.
+ * Rewriting them keeps resumed sessions on the CodeBuddy gateway.
+ * @type {ReadonlyMap<string, string>}
+ */
+export const ALIASES = new Map([
+  ['deepseek-flash', 'deepseek-v4.1-flash'],
+  ['MiniMax-M3', 'minimax-m3'],
+  ['MiniMax-M3.1-Flash-Preview', 'minimax-m3'],
+]);
+
+/** Trailing context-size hint Claude Code appends, e.g. `[1m]`, `[200k]`. */
+const CONTEXT_SUFFIX = /\[[^\]]*\]$/;
+
+/**
+ * Rewrite a requested model id to a current one, when we know a mapping.
+ * A trailing `[1m]`-style suffix is stripped first, so `MiniMax-M3[1m]`
+ * resolves through the same alias as `MiniMax-M3`.
+ * @param {string} model  Model id taken from the request body.
+ * @returns {string} The id to send upstream (unchanged when there is no alias).
+ */
+export function normalizeModel(model) {
+  if (!model || typeof model !== 'string') return model;
+  const base = model.replace(CONTEXT_SUFFIX, '');
+  const alias = ALIASES.get(base);
+  if (alias) return alias;
+  return base !== model ? base : model;
+}

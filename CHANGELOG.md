@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Model-id aliasing: legacy ids replayed when resuming old sessions are rewritten to
+  current CodeBuddy ids (`deepseek-flash` → `deepseek-v4.1-flash`, `MiniMax-M3` and
+  `MiniMax-M3.1-Flash-Preview` → `minimax-m3`). A trailing `[1m]`-style context suffix
+  is stripped first. This keeps resumed sessions on the reliable gateway leg instead of
+  the fallback.
+
 ### Changed
 
 - Plain `claude` now routes through the router. `install.sh` backs up

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { isCodeBuddy, filterCatalog } from '../router/lib/models.mjs';
+import { isCodeBuddy, filterCatalog, normalizeModel } from '../router/lib/models.mjs';
 
 test('isCodeBuddy: false for empty / missing model', () => {
   assert.equal(isCodeBuddy(''), false);
@@ -33,4 +33,33 @@ test('isCodeBuddy: classification is case-sensitive', () => {
 
 test('filterCatalog: drops empty and denied ids, preserves order', () => {
   assert.deepEqual(filterCatalog(['deep-model', 'glm-5.3', '', 'kimi-k3']), ['glm-5.3', 'kimi-k3']);
+});
+
+test('normalizeModel: rewrites legacy ids to current CodeBuddy ids', () => {
+  assert.equal(normalizeModel('deepseek-flash'), 'deepseek-v4.1-flash');
+  assert.equal(normalizeModel('MiniMax-M3'), 'minimax-m3');
+  assert.equal(normalizeModel('MiniMax-M3.1-Flash-Preview'), 'minimax-m3');
+});
+
+test('normalizeModel: strips a trailing context-size suffix before aliasing', () => {
+  assert.equal(normalizeModel('MiniMax-M3[1m]'), 'minimax-m3');
+  assert.equal(normalizeModel('MiniMax-M3.1-Flash-Preview[1m]'), 'minimax-m3');
+});
+
+test('normalizeModel: strips the suffix even without an alias', () => {
+  assert.equal(normalizeModel('deepseek-v4.1-flash[1m]'), 'deepseek-v4.1-flash');
+});
+
+test('normalizeModel: leaves current and unknown ids untouched', () => {
+  assert.equal(normalizeModel('deepseek-v4.1-flash'), 'deepseek-v4.1-flash');
+  assert.equal(normalizeModel('minimax-m3'), 'minimax-m3');
+  assert.equal(normalizeModel('some-exotic-id'), 'some-exotic-id');
+  assert.equal(normalizeModel(''), '');
+  assert.equal(normalizeModel(undefined), undefined);
+});
+
+test('normalizeModel output for aliased ids classifies as CodeBuddy', () => {
+  for (const id of ['deepseek-flash', 'MiniMax-M3', 'MiniMax-M3[1m]', 'MiniMax-M3.1-Flash-Preview']) {
+    assert.equal(isCodeBuddy(normalizeModel(id)), true, id);
+  }
 });

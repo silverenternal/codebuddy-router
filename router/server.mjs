@@ -17,7 +17,7 @@ import http from 'node:http';
 import https from 'node:https';
 import fs from 'node:fs';
 
-import { isCodeBuddy } from './lib/models.mjs';
+import { isCodeBuddy, normalizeModel } from './lib/models.mjs';
 import { parseEnv, readFallback } from './lib/settings.mjs';
 
 const cfg = parseEnv();
@@ -107,14 +107,25 @@ const server = http.createServer(async (req, res) => {
   for await (const c of req) chunks.push(c);
   const body = Buffer.concat(chunks);
 
+  // Rewrite legacy model ids (e.g. a resumed session pinned to `MiniMax-M3`)
+  // to their current CodeBuddy equivalent so they stay on the reliable leg.
   let model = '';
-  try { model = JSON.parse(body.toString('utf8')).model || ''; } catch { /* non-JSON body */ }
+  let outBody = body;
+  try {
+    const parsed = JSON.parse(body.toString('utf8'));
+    const raw = parsed.model || '';
+    model = normalizeModel(raw);
+    if (model && model !== raw) {
+      parsed.model = model;
+      outBody = Buffer.from(JSON.stringify(parsed));
+    }
+  } catch { /* non-JSON body */ }
 
   const useCb = isCodeBuddy(model, cbModels);
   const base = useCb ? cfg.codebuddyBase : fallbackBase;
   const bearer = useCb ? null : (fallbackToken ? 'Bearer ' + fallbackToken : null);
   console.log(`[router] ${req.method} ${req.url} model=${model || '-'} -> ${useCb ? 'codebuddy' : 'fallback'}`);
-  proxy(req, res, base, body, bearer);
+  proxy(req, res, base, outBody, bearer);
 });
 
 server.listen(cfg.port, '127.0.0.1', () => {

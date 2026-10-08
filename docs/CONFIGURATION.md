@@ -27,6 +27,24 @@ from the `config/*.example` templates. **Existing files are never overwritten** 
 > The router does **not** need an outbound proxy: it talks to the gateway and the
 > fallback provider over ordinary HTTP(S).
 
+### Model aliases
+
+A Claude Code session records the model it was created with, and resuming an old
+session can replay an id that no longer exists — a retired CodeBuddy id, or a
+fallback-provider id that would otherwise take the (usually less reliable) fallback
+leg. The router rewrites these to a current CodeBuddy id before routing, so resumed
+sessions stay on the gateway:
+
+| Requested id | Rewritten to |
+|---|---|
+| `deepseek-flash` | `deepseek-v4.1-flash` |
+| `MiniMax-M3` | `minimax-m3` |
+| `MiniMax-M3.1-Flash-Preview` | `minimax-m3` |
+
+A trailing context-size suffix (`[1m]`, `[200k]`, …) is stripped first, so
+`MiniMax-M3[1m]` resolves through the same alias. Ids with no alias are passed
+through untouched. To add a mapping, edit `ALIASES` in `router/lib/models.mjs`.
+
 ### Fallback provider
 
 The fallback (used for any model that is **not** a CodeBuddy model) is configured in the
