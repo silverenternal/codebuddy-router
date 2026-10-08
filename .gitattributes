@@ -1,0 +1,10 @@
+# Normalise line endings to LF on checkout and in the repository.
+* text=auto eol=lf
+
+*.sh  text eol=lf
+*.mjs text eol=lf
+*.md  text eol=lf
+
+# Binary assets (if any) should never be text-normalised.
+*.png binary
+*.jpg binary

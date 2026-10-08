@@ -1,0 +1,17 @@
+{
+  "name": "codebuddy-router",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Use CodeBuddy models inside Claude Code via a local Anthropic-API router, without touching your existing config.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "check": "node --check router/server.mjs && node --check router/gen-picker.mjs && node --check router/lib/models.mjs && node --check router/lib/picker.mjs && node --check router/lib/settings.mjs",
+    "test": "node --test",
+    "lint": "npm run check && npm test",
+    "picker": "node router/gen-picker.mjs"
+  }
+}
