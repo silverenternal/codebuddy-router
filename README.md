@@ -17,7 +17,7 @@
 
 ## 特性
 
-- **一条命令可用**：装好后直接 `claude` 即可；`claude-cb` 是带健康检查的便捷入口。
+- **一条命令可用**：装好后直接 `claude` 即可；`claude-cb` 是**可选**的便捷入口（与 `claude` 等价，仅多一步启动前健康检查）。
 - **默认 deepseek**：主模型 / 各档位 / subagent 全部默认 `deepseek-v4.1-flash`，随时可切。
 - **统一选择器**：一个 `/model` 同时列出 CodeBuddy 与 fallback 两族模型。
 - **动态目录**：`/model` 列表由定时器从实时模型目录生成，上游增删模型会自动跟进。
@@ -53,7 +53,8 @@ claude-cb doctor                 # 诊断路由器 / 网关 / 上游
 ```
 
 进入交互式会话后输入 `/model`，即可在 CodeBuddy 与 fallback 两族模型间切换。
-`claude-cb` 与 `claude` 等价，只是启动前会确保路由器在线。
+
+> `claude-cb` 是**可选**的：它与 `claude` 完全等价，只在启动前多做一次路由器健康检查（必要时自动拉起服务）。路由器本身有 systemd 守护，所以平时直接用 `claude` 就行；`claude-cb doctor` 用于一键诊断。
 
 ### 指定 subagent 的模型
 
