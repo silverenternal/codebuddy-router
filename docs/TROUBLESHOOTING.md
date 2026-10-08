@@ -24,8 +24,8 @@ systemctl --user status codebuddy-router.service
 failing.
 
 **Cause:** the gateway cannot reach `https://www.codebuddy.ai` — typically because the
-host resolves it to a fake-IP (`198.18.0.0/15`) that is only routable through a local
-proxy, but the proxy is not set for the gateway.
+host resolves it to a fake-IP that is only routable through a local proxy, but the proxy
+is not set for the gateway.
 
 **Fix:** set the proxy in `~/.config/codebuddy2api.env` and restart:
 
