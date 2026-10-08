@@ -9,7 +9,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "check": "node --check router/server.mjs && node --check router/gen-picker.mjs && node --check router/lib/models.mjs && node --check router/lib/picker.mjs && node --check router/lib/settings.mjs",
+    "check": "node --check router/server.mjs && node --check router/gen-picker.mjs && node --check router/configure-settings.mjs && node --check router/lib/models.mjs && node --check router/lib/picker.mjs && node --check router/lib/settings.mjs",
     "test": "node --test",
     "lint": "npm run check && npm test",
     "picker": "node router/gen-picker.mjs"

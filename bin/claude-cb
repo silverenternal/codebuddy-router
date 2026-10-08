@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Launch Claude Code against the local model router.
 #
-# One entry point, both model families: the router (codebuddy-router) sends
-# CodeBuddy models to the local codebuddy2api gateway and everything else to
-# your normal provider (MiniMax). So a single session's /model picker lists
-# both. ~/.claude/settings.json is NOT modified; plain `claude` is untouched.
+# Convenience wrapper that makes sure the router is up before launching. The
+# router (codebuddy-router) sends CodeBuddy models to the local codebuddy2api
+# gateway and everything else to your fallback provider, so one /model picker
+# lists both families. `~/.claude/settings.json` points at the router, so plain
+# `claude` uses the same setup — this wrapper just adds a health check.
 #
 #   claude-cb                 # default model (deepseek-v4.1-flash)
 #   claude-cb --model MiniMax-M3
@@ -12,7 +13,7 @@
 #   claude-cb doctor          # diagnose router / gateway / upstream
 set -euo pipefail
 
-SETTINGS="$HOME/.claude/codebuddy-proxy.settings.json"
+SETTINGS="$HOME/.claude/settings.json"
 ROUTER_HEALTH="http://127.0.0.1:8788/health"
 MESSAGES="http://127.0.0.1:8788/v1/messages"
 UNIT="codebuddy-router.service"
@@ -54,4 +55,4 @@ if ! healthy; then
   exit 1
 fi
 
-exec claude --settings "$SETTINGS" "$@"
+exec claude "$@"

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Plain `claude` now routes through the router. `install.sh` backs up
+  `~/.claude/settings.json`, points it at the router, and moves the previous provider
+  into `FALLBACK_BASE` / `FALLBACK_TOKEN` in the router env (avoiding a self-reference
+  loop). Every model slot defaults to `deepseek-v4.1-flash`.
+- `claude-cb` is now a thin health-check wrapper around `claude`.
+- The `/model` picker is written to `~/.claude/settings.json` (previously a separate
+  `codebuddy-proxy.settings.json`). Added `router/configure-settings.mjs` to do the wiring.
+
 ## [1.0.0] - 2026-10-08
 
 ### Added

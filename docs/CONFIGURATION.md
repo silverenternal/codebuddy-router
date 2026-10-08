@@ -8,11 +8,10 @@ from the `config/*.example` templates. **Existing files are never overwritten** 
 
 | File | Purpose |
 |---|---|
-| `~/.config/codebuddy-router.env` | Router settings (port, gateway URL, optional fallback overrides) |
+| `~/.config/codebuddy-router.env` | Router settings: port, gateway URL, **and the fallback provider** (`FALLBACK_BASE` / `FALLBACK_TOKEN` / `FALLBACK_MODELS`) |
 | `~/.config/codebuddy2api.env` | Gateway runtime env (e.g. outbound proxy) |
-| `~/.claude/codebuddy-proxy.settings.json` | Settings passed to Claude Code via `--settings` (`env` + generated `modelPicker`) |
+| `~/.claude/settings.json` | Points Claude Code at the router (`env` + generated `modelPicker`). **Backed up** by `install.sh` before it is rewritten |
 | `~/codebuddy2api/config.json` | Gateway config — **holds your CodeBuddy `api_key`** |
-| `~/.claude/settings.json` | Your existing Claude Code config (used as the fallback provider) |
 
 ## Router: `~/.config/codebuddy-router.env`
 
@@ -20,22 +19,32 @@ from the `config/*.example` templates. **Existing files are never overwritten** 
 |---|---|---|
 | `ROUTER_PORT` | `8788` | Port the router listens on (localhost only). |
 | `CODEBUDDY_URL` | `http://127.0.0.1:8787` | Base URL of the local `codebuddy2api` gateway. |
-| `FALLBACK_BASE` | *(settings.json)* | Override the fallback provider base URL. |
-| `FALLBACK_TOKEN` | *(settings.json)* | Override the fallback provider token. |
+| `FALLBACK_BASE` | *(none)* | Fallback provider base URL. |
+| `FALLBACK_TOKEN` | *(none)* | Fallback provider token. |
 | `FALLBACK_MODELS` | *(empty)* | Comma-separated model ids to advertise for the fallback provider in the picker. |
-| `CLAUDE_SETTINGS` | `~/.claude/settings.json` | Where to read the fallback provider from. |
+| `CLAUDE_SETTINGS` | `~/.claude/settings.json` | Where the router *would* read the fallback from, if `FALLBACK_*` are not set. |
 
 > The router does **not** need an outbound proxy: it talks to the gateway and the
 > fallback provider over ordinary HTTP(S).
 
-### Fallback resolution order
+### Fallback provider
 
-For each of base URL and token, the router uses, in order:
+The fallback (used for any model that is **not** a CodeBuddy model) is configured in the
+router env file:
 
-1. `FALLBACK_BASE` / `FALLBACK_TOKEN` from the env file (if set).
-2. The value in `~/.claude/settings.json` (`env.ANTHROPIC_BASE_URL` / `env.ANTHROPIC_AUTH_TOKEN`).
+```env
+FALLBACK_BASE=https://your-provider.example.com/anthropic
+FALLBACK_TOKEN=sk-xxxxxxxxxxxxxxxx
+FALLBACK_MODELS=your-model-a,your-model-b
+```
 
-The settings file is re-read whenever it changes, so edits apply without a restart.
+`install.sh` fills these in from your previous `settings.json`. They are kept explicit
+here because `~/.claude/settings.json` now points at the router — reading the fallback
+from there would be a self-reference loop. Restart the router after changing them:
+
+```bash
+systemctl --user restart codebuddy-router.service
+```
 
 ## Gateway: `~/.config/codebuddy2api.env`
 
@@ -46,13 +55,19 @@ The settings file is re-read whenever it changes, so edits apply without a resta
 
 If you have direct connectivity, leave the proxy lines commented out.
 
-## Claude Code: `~/.claude/codebuddy-proxy.settings.json`
+## Claude Code: `~/.claude/settings.json`
 
-Written by `install.sh` (from the example) and maintained by the picker timer.
+`install.sh` backs this file up and rewrites it (via `router/configure-settings.mjs`)
+so that plain `claude` routes through the router. Your unrelated keys (e.g.
+permissions) are preserved.
 
-- `env` — points Claude Code at the router and sets the default/subagent models.
+- `env` — points Claude Code at the router; every model slot defaults to
+  `deepseek-v4.1-flash`: `ANTHROPIC_MODEL`, the three `ANTHROPIC_DEFAULT_*_MODEL`
+  slots, and `CLAUDE_CODE_SUBAGENT_MODEL`.
 - `modelPicker.options` — **generated**; do not edit by hand. Regenerate with
   `systemctl --user start codebuddy-picker.service`.
+
+To switch a model, use `/model` in a session, or edit `env` directly.
 
 ## Gateway key: `~/codebuddy2api/config.json`
 

@@ -10,15 +10,16 @@ Anthropic Messages API endpoint to Claude Code and fans out to **two** upstreams
   `~/.claude/settings.json`
 
 This is what lets a single Claude Code session list and switch between both model
-families in one `/model` picker, without editing the user's normal config.
+families in one `/model` picker. The installer points `~/.claude/settings.json` at the
+router (backing it up first), so plain `claude` gets the same setup.
 
 ## Components
 
 ```
 ┌──────────────┐   Anthropic Messages API    ┌──────────────────────┐
 │  Claude Code │ ──────────────────────────▶ │  codebuddy-router    │
-│  (claude-cb  │   127.0.0.1:8788            │  server.mjs          │
-│   --settings)│ ◀────────────────────────── │                      │
+│  (claude /   │   127.0.0.1:8788            │  server.mjs          │
+│   claude-cb) │ ◀────────────────────────── │                      │
 └──────────────┘                             └───────┬──────┬───────┘
                                                      │      │
                      model ∈ CodeBuddy ? ────────────┘      └──────── 否则
@@ -34,7 +35,7 @@ families in one `/model` picker, without editing the user's normal config.
 
 | Component | Unit / file | Role |
 |---|---|---|
-| Launcher | `bin/claude-cb` | Health-checks the router, starts it if down, then `exec claude --settings …` |
+| Launcher | `bin/claude-cb` | Health-checks the router, starts it if down, then `exec claude` |
 | Router | `router/server.mjs` | The HTTP endpoint; classifies by model name and proxies |
 | Picker sync | `router/gen-picker.mjs` | Regenerates the `/model` list from the live catalog |
 | Gateway | `codebuddy2api` (external) | Translates Anthropic ⇄ CodeBuddy and talks to `www.codebuddy.ai` |
@@ -44,8 +45,8 @@ families in one `/model` picker, without editing the user's normal config.
 
 1. `claude-cb` probes `GET /health`. If unhealthy, it runs
    `systemctl --user reset-failed` + `start codebuddy-router.service`, then waits.
-2. Claude Code is launched with `--settings ~/.claude/codebuddy-proxy.settings.json`,
-   whose `env` points `ANTHROPIC_BASE_URL` at `http://127.0.0.1:8788`.
+2. Claude Code reads `~/.claude/settings.json`, whose `env` points `ANTHROPIC_BASE_URL`
+   at `http://127.0.0.1:8788` (plain `claude` and `claude-cb` behave the same).
 3. For each request the router reads the `model` field from the JSON body and decides:
    - `isCodeBuddy(model, cbModels)` → proxy to the gateway (no auth header injected;
      the gateway holds the CodeBuddy key).
@@ -75,7 +76,7 @@ them so they never reach the picker.
 ```
 codebuddy2api /v1/models ─┐
                           ├─▶ router GET /v1/models ─▶ gen-picker ─▶ modelPicker.options
-fallback (FALLBACK_MODELS)┘        (merged, live)                    (~/.claude/codebuddy-proxy.settings.json)
+fallback (FALLBACK_MODELS)┘        (merged, live)                    (~/.claude/settings.json)
 ```
 
 `gen-picker.mjs` rewrites **only** the `modelPicker` block, preserving `env`. It is a
@@ -91,6 +92,7 @@ wipes the user's picker.
 | `router/lib/settings.mjs` | Env parsing + fallback extraction | reads a settings file |
 | `router/server.mjs` | HTTP server + streaming proxy | network |
 | `router/gen-picker.mjs` | Fetch catalog, write picker | network + file |
+| `router/configure-settings.mjs` | Wire Claude Code to the router (run by `install.sh`) | file |
 
 Pure modules are covered by `node:test` (see `test/`).
 
@@ -102,8 +104,9 @@ Pure modules are covered by `node:test` (see `test/`).
   giving up. `codebuddy-router.service` has `Wants=codebuddy2api.service`, so starting
   the router pulls up the gateway too.
 - `loginctl enable-linger` keeps the services running after logout / at boot.
-- The fallback config is re-read on change (`fs.watchFile`), so updating
-  `~/.claude/settings.json` takes effect without a restart.
+- The fallback provider is configured explicitly in `~/.config/codebuddy-router.env`
+  (`FALLBACK_BASE` / `FALLBACK_TOKEN`), because `settings.json` now points at the router
+  itself. Changing it requires a router restart.
 
 ## Design trade-offs
 

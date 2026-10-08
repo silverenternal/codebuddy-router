@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { normalizeBase, parseEnv, extractFallback } from '../router/lib/settings.mjs';
+import { normalizeBase, parseEnv, extractFallback, buildRouterSettings, ROUTER_ENV_DEFAULTS } from '../router/lib/settings.mjs';
 
 test('normalizeBase: strips trailing slashes', () => {
   assert.equal(normalizeBase('https://x/y///'), 'https://x/y');
@@ -42,4 +42,28 @@ test('extractFallback: pulls base + token from settings env', () => {
 test('extractFallback: missing env -> empty object', () => {
   assert.deepEqual(extractFallback({}), {});
   assert.deepEqual(extractFallback({ env: {} }), {});
+});
+
+test('ROUTER_ENV_DEFAULTS: every model slot defaults to deepseek', () => {
+  const slots = [
+    'ANTHROPIC_MODEL',
+    'ANTHROPIC_DEFAULT_SONNET_MODEL',
+    'ANTHROPIC_DEFAULT_OPUS_MODEL',
+    'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+    'CLAUDE_CODE_SUBAGENT_MODEL',
+  ];
+  for (const k of slots) assert.equal(ROUTER_ENV_DEFAULTS[k], 'deepseek-v4.1-flash', k);
+  assert.equal(ROUTER_ENV_DEFAULTS.ANTHROPIC_BASE_URL, 'http://127.0.0.1:8788');
+});
+
+test('buildRouterSettings: preserves unrelated keys, sets env + empty picker', () => {
+  const out = buildRouterSettings({ skipDangerousModePermissionPrompt: true, env: { OLD: 'x' } });
+  assert.equal(out.skipDangerousModePermissionPrompt, true);
+  assert.deepEqual(out.env, ROUTER_ENV_DEFAULTS);
+  assert.deepEqual(out.modelPicker, { options: [] });
+});
+
+test('buildRouterSettings: keeps an existing modelPicker', () => {
+  const out = buildRouterSettings({ modelPicker: { options: [{ model: 'x' }] } });
+  assert.deepEqual(out.modelPicker.options, [{ model: 'x' }]);
 });

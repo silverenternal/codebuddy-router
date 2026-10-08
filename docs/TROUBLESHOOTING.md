@@ -62,10 +62,18 @@ Some ids the upstream advertises are broken. Add the id to the `DENY` set in
 - **Node not found:** the unit uses an absolute `node` path resolved at install time;
   re-run `./install.sh` after changing your Node install.
 
-## Does this affect my normal `claude`?
+## What if the router is down?
 
-No. The proxy settings are passed only via `--settings` for the `claude-cb` session.
-Plain `claude` keeps using `~/.claude/settings.json` unchanged.
+Plain `claude` points at the router, so if the router is down, requests fail. It runs
+under systemd with `Restart=always` and linger, so it normally recovers on its own. Use
+`claude-cb` (which health-checks and restarts it first), or:
+
+```bash
+systemctl --user restart codebuddy-router.service
+```
+
+To revert entirely to your previous provider, restore a `settings.json.bak-*` backup that
+`install.sh` created.
 
 ## Uninstall
 
@@ -73,5 +81,6 @@ Plain `claude` keeps using `~/.claude/settings.json` unchanged.
 ./install.sh --uninstall
 ```
 
-This stops and removes the services and the `claude-cb` launcher. Your env files and
-`~/.claude/codebuddy-proxy.settings.json` are left in place.
+This stops and removes the services and the `claude-cb` launcher. Your env files are
+left in place. `~/.claude/settings.json` still points at the router — restore a
+`settings.json.bak-*` backup to go back to your previous provider.

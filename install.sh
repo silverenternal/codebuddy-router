@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # install.sh — set up the CodeBuddy-in-Claude-Code model router.
 #
-# Idempotent: safe to re-run. It never overwrites your existing env files,
-# Claude settings, or the gateway config.json.
+# Idempotent: safe to re-run. Existing env files are kept, and Claude Code's
+# settings.json is backed up before being rewritten to point at the router.
 #
 #   ./install.sh                     # install (bootstraps the gateway too)
 #   ./install.sh --skip-gateway      # don't clone/build codebuddy2api
@@ -20,7 +20,7 @@ UNIT_DIR="$HOME/.config/systemd/user"
 BIN_DIR="$HOME/.local/bin"
 CONF_DIR="$HOME/.config"
 CLAUDE_DIR="$HOME/.claude"
-PROXY_SETTINGS="$CLAUDE_DIR/codebuddy-proxy.settings.json"
+CLAUDE_SETTINGS="$CLAUDE_DIR/settings.json"
 
 for arg in "$@"; do
   case "$arg" in
@@ -57,7 +57,7 @@ if [ "$UNINSTALL" = 1 ]; then
         "$UNIT_DIR/codebuddy-picker.timer"
   rm -f "$BIN_DIR/claude-cb"
   systemctl --user daemon-reload 2>/dev/null || true
-  log "Uninstalled. Your env files and $PROXY_SETTINGS were left in place."
+  log "Uninstalled. Your env files and $CLAUDE_SETTINGS were left in place."
   exit 0
 fi
 
@@ -111,7 +111,10 @@ seed() { # seed <example> <dest>
 }
 seed "$REPO/config/codebuddy-router.env.example" "$CONF_DIR/codebuddy-router.env"
 seed "$REPO/config/codebuddy2api.env.example"   "$CONF_DIR/codebuddy2api.env"
-seed "$REPO/config/claude-proxy-settings.example.json" "$PROXY_SETTINGS"
+
+# --- wire Claude Code to the router (plain `claude` included) -----------------
+log "Wiring Claude Code to the router"
+"$NODE_BIN" "$REPO/router/configure-settings.mjs"
 
 # --- activate -----------------------------------------------------------------
 systemctl --user daemon-reload
@@ -128,8 +131,7 @@ fi
 
 echo
 log "Done. Next steps:"
-echo "  1. Ensure your normal ~/.claude/settings.json points at your fallback provider."
-echo "  2. Set the CodeBuddy api_key in $GATEWAY_DIR/config.json, then:"
+echo "  1. Set the CodeBuddy api_key in $GATEWAY_DIR/config.json, then:"
 echo "       systemctl --user restart codebuddy2api.service"
-echo "  3. Verify:  claude-cb doctor"
-echo "  4. Launch:  claude-cb     (then use /model to switch models)"
+echo "  2. Verify:  claude-cb doctor"
+echo "  3. Launch:  claude     (then use /model to switch models)"

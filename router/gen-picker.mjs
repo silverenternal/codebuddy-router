@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Keep the Claude Code /model picker in sync with the live model catalog.
 //
-// The picker in ~/.claude/codebuddy-proxy.settings.json is otherwise a frozen
-// snapshot: when CodeBuddy adds/removes models, it goes stale. This script
-// pulls the merged catalog from the router (/v1/models) and rewrites ONLY the
-// `modelPicker` block, preserving `env`. It is run by codebuddy-picker.timer.
+// The picker in ~/.claude/settings.json is otherwise a frozen snapshot: when
+// CodeBuddy adds/removes models, it goes stale. This script pulls the merged
+// catalog from the router (/v1/models) and rewrites ONLY the `modelPicker`
+// block, preserving every other key. It is run by codebuddy-picker.timer.
 //
 // Safe by construction: if the router is unreachable or returns nothing, the
 // existing picker is left untouched.
@@ -16,7 +16,7 @@ import { filterCatalog } from './lib/models.mjs';
 import { buildOptions } from './lib/picker.mjs';
 
 const ROUTER = (process.env.ROUTER_URL || 'http://127.0.0.1:8788').replace(/\/+$/, '');
-const SETTINGS = process.env.PROXY_SETTINGS || path.join(os.homedir(), '.claude', 'codebuddy-proxy.settings.json');
+const SETTINGS = process.env.CLAUDE_SETTINGS || path.join(os.homedir(), '.claude', 'settings.json');
 
 /** Fetch the merged model catalog from the router. Throws on failure. */
 async function fetchModels() {

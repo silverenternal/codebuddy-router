@@ -66,3 +66,33 @@ export function extractFallback(settings) {
 export function readFallback(settingsPath) {
   return extractFallback(JSON.parse(fs.readFileSync(settingsPath, 'utf8')));
 }
+
+/**
+ * Default `env` written into Claude Code's settings so that plain `claude`
+ * routes through the router, with every model slot defaulting to deepseek.
+ * @type {Readonly<Record<string, string>>}
+ */
+export const ROUTER_ENV_DEFAULTS = Object.freeze({
+  ANTHROPIC_BASE_URL: 'http://127.0.0.1:8788',
+  ANTHROPIC_AUTH_TOKEN: 'codebuddy-router-local',
+  ANTHROPIC_MODEL: 'deepseek-v4.1-flash',
+  ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4.1-flash',
+  ANTHROPIC_DEFAULT_OPUS_MODEL: 'deepseek-v4.1-flash',
+  ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4.1-flash',
+  CLAUDE_CODE_SUBAGENT_MODEL: 'deepseek-v4.1-flash',
+});
+
+/**
+ * Merge the router `env` (and an empty `modelPicker` if absent) into an existing
+ * Claude Code settings object, preserving the user's unrelated keys.
+ * @param {Record<string, unknown>} [existing]  Current settings object (may be undefined).
+ * @param {Record<string, string>} [env]        Router env to write (defaults to {@link ROUTER_ENV_DEFAULTS}).
+ * @returns {Record<string, unknown>} New settings object.
+ */
+export function buildRouterSettings(existing, env = ROUTER_ENV_DEFAULTS) {
+  return {
+    ...(existing || {}),
+    env,
+    modelPicker: (existing && existing.modelPicker) || { options: [] },
+  };
+}

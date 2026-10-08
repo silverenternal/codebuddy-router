@@ -1,14 +1,14 @@
 # codebuddy-router
 
 在 **Claude Code** 里直接使用 **CodeBuddy** 的模型（DeepSeek / GLM / Kimi / GPT / Gemini / MiniMax …），
-并和你原本的模型服务（任何 Anthropic 兼容端点）**并列在同一个 `/model` 选择器里**切换——
-**不改动**你现有的 `~/.claude/settings.json`，普通的 `claude` 命令也完全不受影响。
+并和你原本的模型服务（任何 Anthropic 兼容端点）**并列在同一个 `/model` 选择器里**切换。
+默认模型是 `deepseek-v4.1-flash`，23 个模型随时可切。
 
 ```
                        ┌─────────────────────────────┐
-  claude-cb  ─────────▶│  codebuddy-router            │
-  (Claude Code         │  127.0.0.1:8788              │
-   --settings ...)     │                             │
+  claude / claude-cb   │  codebuddy-router            │
+  ────────────────────▶│  127.0.0.1:8788              │
+                       │                             │
                        │  model ∈ CodeBuddy ? ───────┼──▶ codebuddy2api ──▶ https://www.codebuddy.ai
                        │                             │      127.0.0.1:8787
                        │  否则（fallback）────────────┼──▶ 你原有的 provider
@@ -17,10 +17,10 @@
 
 ## 特性
 
-- **零侵入**：通过 `claude --settings <file>` 覆盖配置，不写盘、不碰 `~/.claude/settings.json`。
-- **统一入口**：一条命令 `claude-cb`，一个 `/model` 选择器同时列出两个 provider 的模型。
+- **一条命令可用**：装好后直接 `claude` 即可；`claude-cb` 是带健康检查的便捷入口。
+- **默认 deepseek**：主模型 / 各档位 / subagent 全部默认 `deepseek-v4.1-flash`，随时可切。
+- **统一选择器**：一个 `/model` 同时列出 CodeBuddy 与 fallback 两族模型。
 - **动态目录**：`/model` 列表由定时器从实时模型目录生成，上游增删模型会自动跟进。
-- **回退热读取**：fallback 的地址与 token 直接读你现有的 `~/.claude/settings.json`，改了就生效，无需重启。
 - **稳**：systemd `--user` 常驻、无限重启、崩溃自愈；`claude-cb doctor` 一键体检。
 
 ## 快速开始
@@ -32,27 +32,33 @@ cd codebuddy-router
 ```
 
 安装脚本会：克隆并构建 [codebuddy2api](https://github.com/isyntop/codebuddy2api) 网关 →
-安装 `claude-cb` 到 `~/.local/bin` → 安装并启动 systemd 用户服务与选择器定时器。
+安装 `claude-cb` → 安装并启动 systemd 用户服务与选择器定时器 →
+**备份** `~/.claude/settings.json` 并改写为指向路由器（同时把你原有的 provider 记入 fallback）。
 
 随后：
 
 1. 在 `~/codebuddy2api/config.json` 里填入你的 CodeBuddy `api_key`，然后
    `systemctl --user restart codebuddy2api.service`
-2. 确认 `~/.claude/settings.json` 指向你原本的 provider（fallback）
-3. 体检：`claude-cb doctor`
-4. 启动：`claude-cb`，进入会话后用 `/model` 切换模型
+2. 体检：`claude-cb doctor`
+3. 启动：`claude`（或 `claude-cb`），进入会话后用 `/model` 切换模型
 
 > 常见选项：`./install.sh --skip-gateway`（已有网关时）、`--gateway-dir=/path`、`--uninstall`。
 
 ## 使用
 
 ```bash
-claude-cb                        # 默认模型（deepseek-v4.1-flash）
-claude-cb --model gpt-6-luna     # 直接指定某个模型
+claude                           # 默认模型 deepseek-v4.1-flash
+claude --model gpt-6-luna        # 直接指定某个模型
 claude-cb doctor                 # 诊断路由器 / 网关 / 上游
 ```
 
 进入交互式会话后输入 `/model`，即可在 CodeBuddy 与 fallback 两族模型间切换。
+`claude-cb` 与 `claude` 等价，只是启动前会确保路由器在线。
+
+### 指定 subagent 的模型
+
+- 全局：`~/.claude/settings.json` 的 `CLAUDE_CODE_SUBAGENT_MODEL`（默认 `deepseek-v4.1-flash`）。
+- 单个 agent：在 `~/.claude/agents/<name>.md` 的 frontmatter 写 `model: gpt-6-luna` 等任意模型 id。
 
 ## 前置条件
 
@@ -83,8 +89,9 @@ codebuddy-router/
 ├── router/
 │   ├── server.mjs          # Anthropic 协议路由器（入口）
 │   ├── gen-picker.mjs      # /model 选择器生成器（入口）
+│   ├── configure-settings.mjs  # 把 Claude Code 接到路由器（安装时调用）
 │   └── lib/                # 纯逻辑：models / picker / settings
-├── bin/claude-cb           # 启动器
+├── bin/claude-cb           # 带健康检查的启动器
 ├── systemd/                # 用户服务与定时器模板
 ├── config/                 # *.example 模板
 ├── test/                   # node:test 单元测试
@@ -94,10 +101,11 @@ codebuddy-router/
 ## English (short)
 
 **codebuddy-router** lets you use **CodeBuddy** models inside **Claude Code** side-by-side
-with your existing provider, without touching `~/.claude/settings.json`. A local Anthropic-API
-router (`127.0.0.1:8788`) forwards CodeBuddy models to a local [codebuddy2api](https://github.com/isyntop/codebuddy2api)
-gateway and everything else to your normal provider (read live from your existing Claude settings).
-One entry point (`claude-cb`), one `/model` picker, systemd-supervised. See `./install.sh --help`.
+with your existing provider in one `/model` picker, defaulting to `deepseek-v4.1-flash`.
+A local Anthropic-API router (`127.0.0.1:8788`) forwards CodeBuddy models to a local
+[codebuddy2api](https://github.com/isyntop/codebuddy2api) gateway and everything else to your
+fallback provider. `./install.sh` wires it up and points `~/.claude/settings.json` at the router
+(backed up first). See `./install.sh --help`.
 
 ## 致谢
 
