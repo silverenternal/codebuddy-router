@@ -1,0 +1,15 @@
+# --- Secrets / local state — never commit -------------------------------------
+*.env
+!*.env.example
+config.json
+*.local.json
+*.settings.json
+!config/*.example.json
+
+# --- Runtime / build artefacts ------------------------------------------------
+node_modules/
+logs/
+*.log
+*.tmp
+*.pid
+.DS_Store

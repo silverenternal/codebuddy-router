@@ -1,0 +1,16 @@
+[Unit]
+Description=Anthropic model router (CodeBuddy + fallback) for Claude Code
+After=network-online.target codebuddy2api.service
+Wants=network-online.target codebuddy2api.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO@/router
+EnvironmentFile=%h/.config/codebuddy-router.env
+ExecStart=@NODE@ @REPO@/router/server.mjs
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

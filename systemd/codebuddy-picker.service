@@ -1,0 +1,8 @@
+[Unit]
+Description=Sync Claude Code /model picker with the live model catalog
+After=codebuddy-router.service
+Wants=codebuddy-router.service
+
+[Service]
+Type=oneshot
+ExecStart=@NODE@ @REPO@/router/gen-picker.mjs

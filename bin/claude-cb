@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Launch Claude Code against the local model router.
+#
+# One entry point, both model families: the router (codebuddy-router) sends
+# CodeBuddy models to the local codebuddy2api gateway and everything else to
+# your normal provider (MiniMax). So a single session's /model picker lists
+# both. ~/.claude/settings.json is NOT modified; plain `claude` is untouched.
+#
+#   claude-cb                 # default model (deepseek-v4.1-flash)
+#   claude-cb --model MiniMax-M3
+#   /model                    # switch between all models in-session
+#   claude-cb doctor          # diagnose router / gateway / upstream
+set -euo pipefail
+
+SETTINGS="$HOME/.claude/codebuddy-proxy.settings.json"
+ROUTER_HEALTH="http://127.0.0.1:8788/health"
+MESSAGES="http://127.0.0.1:8788/v1/messages"
+UNIT="codebuddy-router.service"
+PROBE_MODEL="deepseek-v4.1-flash"
+
+healthy() { curl -sS -m 2 "$ROUTER_HEALTH" >/dev/null 2>&1; }
+
+probe_code() {
+  curl -sS -m 25 "$MESSAGES" \
+    -H 'content-type: application/json' -H 'anthropic-version: 2023-06-01' \
+    -d "{\"model\":\"$PROBE_MODEL\",\"max_tokens\":1,\"system\":\"ping\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" \
+    -o /dev/null -w '%{http_code}' 2>/dev/null || echo 000
+}
+
+doctor() {
+  echo "router unit     : $(systemctl --user is-active "$UNIT" 2>&1) ($(systemctl --user show -p MainPID --value "$UNIT" 2>/dev/null))"
+  echo "gateway unit    : $(systemctl --user is-active codebuddy2api.service 2>&1)"
+  echo "router /health  : $(curl -sS -m 3 "$ROUTER_HEALTH" 2>/dev/null || echo unreachable)"
+  local code; code=$(probe_code)
+  if [ "$code" = "200" ]; then echo "upstream probe  : OK (HTTP $code)"; else echo "upstream probe  : FAILED (HTTP $code)"; fi
+  echo "settings file   : $SETTINGS"
+  echo "logs            : journalctl --user -u codebuddy-router -n 50"
+}
+
+if [ "${1:-}" = "doctor" ]; then doctor; exit $?; fi
+
+if ! healthy; then
+  # Clear a latched "failed" state, then (re)start. Pulls the gateway via Wants=.
+  systemctl --user reset-failed "$UNIT" >/dev/null 2>&1 || true
+  systemctl --user start "$UNIT" >/dev/null 2>&1 || true
+  for _ in $(seq 1 20); do healthy && break; sleep 0.5; done
+fi
+
+if ! healthy; then
+  echo "claude-cb: model router unreachable at $ROUTER_HEALTH" >&2
+  echo "  status: systemctl --user status $UNIT" >&2
+  echo "  logs:   journalctl --user -u codebuddy-router -n 50" >&2
+  echo "  doctor: claude-cb doctor" >&2
+  exit 1
+fi
+
+exec claude --settings "$SETTINGS" "$@"

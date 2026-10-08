@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodically sync the Claude Code /model picker
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,19 @@
+[Unit]
+Description=CodeBuddy -> Claude Code gateway (codebuddy2api)
+Documentation=https://github.com/isyntop/codebuddy2api
+After=network-online.target
+Wants=network-online.target
+# Never give up restarting: without this, a burst of crashes makes systemd
+# mark the unit "failed" and stop trying, leaving the launcher unable to recover.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=@GATEWAY_DIR@
+EnvironmentFile=%h/.config/codebuddy2api.env
+ExecStart=@GATEWAY_DIR@/codebuddy2api run
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target
