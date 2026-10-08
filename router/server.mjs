@@ -17,7 +17,7 @@ import http from 'node:http';
 import https from 'node:https';
 import fs from 'node:fs';
 
-import { isCodeBuddy, normalizeModel } from './lib/models.mjs';
+import { isCodeBuddy, normalizeModel, stripUnsupportedBlocks, extractModelIds } from './lib/models.mjs';
 import { parseEnv, readFallback } from './lib/settings.mjs';
 
 const cfg = parseEnv();
@@ -38,17 +38,34 @@ function loadFallback() {
 loadFallback();
 try { fs.watchFile(cfg.settingsPath, { interval: 5000 }, loadFallback); } catch { /* best effort */ }
 
-// --- CodeBuddy model catalog -------------------------------------------------
+// --- model catalogs ----------------------------------------------------------
+// Both sides are discovered live so the /model picker always reflects what each
+// provider actually offers. The static FALLBACK_MODELS list is the offline
+// fallback for the fallback provider.
 let cbModels = new Set();
 async function refreshCbModels() {
   try {
     const r = await fetch(cfg.codebuddyBase + '/v1/models', { signal: AbortSignal.timeout(3000) });
-    const j = await r.json();
-    cbModels = new Set((j.data || []).map((m) => m.id));
+    cbModels = new Set(extractModelIds(await r.json()));
   } catch { /* keep previous set */ }
 }
+
+let fallbackModels = [...cfg.fallbackModels];
+async function refreshFallbackModels() {
+  try {
+    const r = await fetch(fallbackBase + '/v1/models', {
+      headers: fallbackToken ? { authorization: 'Bearer ' + fallbackToken } : {},
+      signal: AbortSignal.timeout(3000),
+    });
+    const ids = extractModelIds(await r.json());
+    if (ids.length) fallbackModels = ids;
+  } catch { /* keep previous list */ }
+}
+
 await refreshCbModels();
+await refreshFallbackModels();
 setInterval(refreshCbModels, 60_000).unref();
+setInterval(refreshFallbackModels, 60_000).unref();
 
 // --- generic streaming proxy -------------------------------------------------
 function proxy(req, res, base, body, bearer) {
@@ -93,12 +110,12 @@ const server = http.createServer(async (req, res) => {
     let cb = false;
     try { cb = (await fetch(cfg.codebuddyBase + '/health', { signal: AbortSignal.timeout(2000) })).ok; } catch {}
     res.writeHead(200, { 'content-type': 'application/json' });
-    return res.end(JSON.stringify({ ok: true, codebuddy: cb, fallback: fallbackBase, fallback_models: cfg.fallbackModels }));
+    return res.end(JSON.stringify({ ok: true, codebuddy: cb, fallback: fallbackBase, fallback_models: fallbackModels }));
   }
 
   if (req.method === 'GET' && (req.url === '/v1/models' || req.url === '/models')) {
-    await refreshCbModels();
-    const data = [...cbModels, ...cfg.fallbackModels].map((id) => ({ id, object: 'model' }));
+    await Promise.all([refreshCbModels(), refreshFallbackModels()]);
+    const data = [...cbModels, ...fallbackModels].map((id) => ({ id, object: 'model' }));
     res.writeHead(200, { 'content-type': 'application/json' });
     return res.end(JSON.stringify({ object: 'list', data }));
   }
@@ -107,21 +124,24 @@ const server = http.createServer(async (req, res) => {
   for await (const c of req) chunks.push(c);
   const body = Buffer.concat(chunks);
 
-  // Rewrite legacy model ids (e.g. a resumed session pinned to `MiniMax-M3`)
-  // to their current CodeBuddy equivalent so they stay on the reliable leg.
+  // Rewrite legacy model ids (e.g. a resumed session pinned to `MiniMax-M3`) to
+  // their current CodeBuddy equivalent, and drop blocks the CodeBuddy gateway
+  // cannot translate (replayed `thinking` blocks) — so a resumed session stays
+  // on the reliable leg instead of erroring.
   let model = '';
+  let useCb = false;
   let outBody = body;
   try {
     const parsed = JSON.parse(body.toString('utf8'));
     const raw = parsed.model || '';
     model = normalizeModel(raw);
-    if (model && model !== raw) {
-      parsed.model = model;
-      outBody = Buffer.from(JSON.stringify(parsed));
-    }
+    useCb = isCodeBuddy(model, cbModels);
+    let changed = Boolean(model && model !== raw);
+    if (changed) parsed.model = model;
+    if (useCb && stripUnsupportedBlocks(parsed)) changed = true;
+    if (changed) outBody = Buffer.from(JSON.stringify(parsed));
   } catch { /* non-JSON body */ }
 
-  const useCb = isCodeBuddy(model, cbModels);
   const base = useCb ? cfg.codebuddyBase : fallbackBase;
   const bearer = useCb ? null : (fallbackToken ? 'Bearer ' + fallbackToken : null);
   console.log(`[router] ${req.method} ${req.url} model=${model || '-'} -> ${useCb ? 'codebuddy' : 'fallback'}`);

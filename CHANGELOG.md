@@ -9,11 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Model-id aliasing: legacy ids replayed when resuming old sessions are rewritten to
-  current CodeBuddy ids (`deepseek-flash` → `deepseek-v4.1-flash`, `MiniMax-M3` and
-  `MiniMax-M3.1-Flash-Preview` → `minimax-m3`). A trailing `[1m]`-style context suffix
-  is stripped first. This keeps resumed sessions on the reliable gateway leg instead of
-  the fallback.
+- Model-id aliasing: retired CodeBuddy ids replayed when resuming old sessions are
+  rewritten to their current equivalent (`deepseek-flash` → `deepseek-v4.1-flash`), and
+  a trailing `[1m]`-style context suffix is stripped first. Fallback-provider ids
+  (e.g. `MiniMax-M3`) are deliberately **not** rewritten, so the models in the fallback
+  subscription stay selectable.
+- Protocol adaptation: requests routed to CodeBuddy have `thinking` / `redacted_thinking`
+  blocks removed, since the gateway only translates `text` / `image` / `tool_use` /
+  `tool_result` and otherwise returns `400 不支持的内容块类型`. Fixes sessions built on a
+  thinking-capable provider (e.g. MiniMax) erroring once routed to the gateway.
+- The fallback provider's models are now discovered live from its `/v1/models`, so every
+  model in the fallback subscription appears in the `/model` picker. `FALLBACK_MODELS`
+  is only used when that endpoint is unreachable.
 
 ### Changed
 

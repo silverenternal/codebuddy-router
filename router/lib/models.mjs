@@ -45,19 +45,30 @@ export function filterCatalog(ids) {
 }
 
 /**
- * Legacy / stale model-id aliases → current CodeBuddy ids.
+ * Pull model ids out of a `/v1/models` response. Both the Anthropic-style and
+ * OpenAI-style bodies use `{ data: [{ id }] }`, so one reader covers both.
+ * @param {unknown} json  Parsed response body.
+ * @returns {string[]} Model ids (empty when the shape is unexpected).
+ */
+export function extractModelIds(json) {
+  const data = json && Array.isArray(json.data) ? json.data : [];
+  return data.map((m) => m && m.id).filter((id) => typeof id === 'string' && id);
+}
+
+/**
+ * Retired CodeBuddy ids → their current equivalent.
  *
  * A Claude Code session records the model it was created with, and `--resume`
- * replays that id verbatim. Ids from before the router existed are either
- * retired CodeBuddy ids (`deepseek-flash`) or fallback-provider ids
- * (`MiniMax-M3*`) that would otherwise hit the less reliable fallback leg.
- * Rewriting them keeps resumed sessions on the CodeBuddy gateway.
+ * replays that id verbatim. Ids that no longer exist upstream would 400; rewrite
+ * them so an old session keeps working.
+ *
+ * Note: fallback-provider ids (e.g. `MiniMax-M3`) are deliberately **not** listed
+ * here — they must reach the fallback provider, so that the models in that
+ * subscription stay selectable and usable.
  * @type {ReadonlyMap<string, string>}
  */
 export const ALIASES = new Map([
   ['deepseek-flash', 'deepseek-v4.1-flash'],
-  ['MiniMax-M3', 'minimax-m3'],
-  ['MiniMax-M3.1-Flash-Preview', 'minimax-m3'],
 ]);
 
 /** Trailing context-size hint Claude Code appends, e.g. `[1m]`, `[200k]`. */
@@ -76,4 +87,39 @@ export function normalizeModel(model) {
   const alias = ALIASES.get(base);
   if (alias) return alias;
   return base !== model ? base : model;
+}
+
+/**
+ * Content-block types the CodeBuddy gateway cannot translate. It only handles
+ * `text` / `image` / `tool_use` / `tool_result` and rejects anything else with
+ * `400 不支持的内容块类型`. Claude Code replays `thinking` blocks whenever
+ * extended thinking is on, so a session built on a thinking-capable provider
+ * would 400 the moment it is routed to CodeBuddy.
+ * @type {ReadonlySet<string>}
+ */
+export const CB_UNSUPPORTED_BLOCKS = new Set(['thinking', 'redacted_thinking']);
+
+/**
+ * Remove content blocks the CodeBuddy gateway rejects, mutating `body` in place.
+ * An assistant message left with no blocks at all is dropped entirely.
+ * @param {{messages?: Array<{content?: unknown}>}} body  Parsed request body.
+ * @returns {boolean} `true` if anything was removed.
+ */
+export function stripUnsupportedBlocks(body) {
+  if (!body || !Array.isArray(body.messages)) return false;
+  const kept = [];
+  let changed = false;
+  for (const msg of body.messages) {
+    if (msg && Array.isArray(msg.content)) {
+      const blocks = msg.content.filter((b) => !(b && CB_UNSUPPORTED_BLOCKS.has(b.type)));
+      if (blocks.length !== msg.content.length) {
+        changed = true;
+        if (blocks.length === 0) continue; // message was only unsupported blocks
+        msg.content = blocks;
+      }
+    }
+    kept.push(msg);
+  }
+  if (changed) body.messages = kept;
+  return changed;
 }

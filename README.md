@@ -2,7 +2,7 @@
 
 在 **Claude Code** 里直接使用 **CodeBuddy** 的模型（DeepSeek / GLM / Kimi / GPT / Gemini / MiniMax …），
 并和你原本的模型服务（任何 Anthropic 兼容端点）**并列在同一个 `/model` 选择器里**切换。
-默认模型是 `deepseek-v4.1-flash`，23 个模型随时可切。
+默认模型是 `deepseek-v4.1-flash`，两族模型随时可切。
 
 ```
                        ┌─────────────────────────────┐
@@ -19,9 +19,9 @@
 
 - **一条命令可用**：装好后直接 `claude` 即可；`claude-cb` 是**可选**的便捷入口（与 `claude` 等价，仅多一步启动前健康检查）。
 - **默认 deepseek**：主模型 / 各档位 / subagent 全部默认 `deepseek-v4.1-flash`，随时可切。
-- **统一选择器**：一个 `/model` 同时列出 CodeBuddy 与 fallback 两族模型。
+- **统一选择器**：一个 `/model` 同时列出 CodeBuddy 与 fallback 两族模型，两族模型目录都从各自 `/v1/models` 实时发现。
 - **动态目录**：`/model` 列表由定时器从实时模型目录生成，上游增删模型会自动跟进。
-- **续接老会话不报错**：老会话里记录的旧模型 id（`MiniMax-M3`、`deepseek-flash` 等）会被自动映射到当前 CodeBuddy 模型，`--resume` 不再落到不稳定的 fallback 腿。
+- **兼容性**：发往 CodeBuddy 的请求会自动剔除它不支持的 `thinking` 块（否则 `400 不支持的内容块类型`）；老会话里失效的旧 id（如 `deepseek-flash`）会被自动改写。你自己的 provider（如 MiniMax 订阅）模型不受影响、可正常切换。
 - **稳**：systemd `--user` 常驻、无限重启、崩溃自愈；`claude-cb doctor` 一键体检。
 
 ## 快速开始

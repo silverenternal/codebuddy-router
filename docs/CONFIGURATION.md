@@ -21,7 +21,7 @@ from the `config/*.example` templates. **Existing files are never overwritten** 
 | `CODEBUDDY_URL` | `http://127.0.0.1:8787` | Base URL of the local `codebuddy2api` gateway. |
 | `FALLBACK_BASE` | *(none)* | Fallback provider base URL. |
 | `FALLBACK_TOKEN` | *(none)* | Fallback provider token. |
-| `FALLBACK_MODELS` | *(empty)* | Comma-separated model ids to advertise for the fallback provider in the picker. |
+| `FALLBACK_MODELS` | *(empty)* | Model ids to advertise for the fallback provider when its `/v1/models` cannot be reached — otherwise the list is discovered live. |
 | `CLAUDE_SETTINGS` | `~/.claude/settings.json` | Where the router *would* read the fallback from, if `FALLBACK_*` are not set. |
 
 > The router does **not** need an outbound proxy: it talks to the gateway and the
@@ -30,20 +30,26 @@ from the `config/*.example` templates. **Existing files are never overwritten** 
 ### Model aliases
 
 A Claude Code session records the model it was created with, and resuming an old
-session can replay an id that no longer exists — a retired CodeBuddy id, or a
-fallback-provider id that would otherwise take the (usually less reliable) fallback
-leg. The router rewrites these to a current CodeBuddy id before routing, so resumed
-sessions stay on the gateway:
+session can replay an id that no longer exists upstream. The router rewrites these to a
+current equivalent before routing:
 
 | Requested id | Rewritten to |
 |---|---|
 | `deepseek-flash` | `deepseek-v4.1-flash` |
-| `MiniMax-M3` | `minimax-m3` |
-| `MiniMax-M3.1-Flash-Preview` | `minimax-m3` |
 
 A trailing context-size suffix (`[1m]`, `[200k]`, …) is stripped first, so
-`MiniMax-M3[1m]` resolves through the same alias. Ids with no alias are passed
-through untouched. To add a mapping, edit `ALIASES` in `router/lib/models.mjs`.
+`deepseek-v4.1-flash[1m]` resolves too. Ids with no alias are passed through untouched.
+
+Fallback-provider ids (e.g. `MiniMax-M3`) are **never** rewritten — they must reach the
+fallback provider so that every model in that subscription stays selectable. To add a
+mapping, edit `ALIASES` in `router/lib/models.mjs`.
+
+### Protocol adaptation
+
+The CodeBuddy gateway only translates four content-block types (`text`, `image`,
+`tool_use`, `tool_result`). Requests routed to CodeBuddy therefore have `thinking` /
+`redacted_thinking` blocks removed; the fallback leg is left untouched (MiniMax, for
+one, accepts thinking blocks). See [ARCHITECTURE.md](ARCHITECTURE.md#protocol-adaptation).
 
 ### Fallback provider
 

@@ -73,18 +73,35 @@ fallback provider's may not be (`MiniMax-M3`), so the two never collide.
 `DENY` lists ids the upstream advertises but which error out; `filterCatalog()` drops
 them so they never reach the picker.
 
-Before classification, `normalizeModel()` maps a small set of legacy ids (`ALIASES`)
-to current CodeBuddy ids and strips a trailing `[1m]`-style context suffix. This is what
-keeps a resumed old session — pinned to e.g. `MiniMax-M3` or `deepseek-flash` — on the
-gateway leg instead of the fallback.
+Before classification, `normalizeModel()` rewrites a small set of retired ids (`ALIASES`)
+to their current equivalent and strips a trailing `[1m]`-style context suffix — so a
+resumed old session pinned to e.g. `deepseek-flash` keeps working. Fallback-provider ids
+(e.g. `MiniMax-M3`) are deliberately left alone, so every model in the fallback
+subscription stays reachable.
+
+## Protocol adaptation
+
+The CodeBuddy gateway translates the Anthropic Messages API to an OpenAI-style chat
+request, and only understands four content-block types: `text`, `image`, `tool_use`,
+`tool_result`. Anything else is rejected with `400 不支持的内容块类型`. Claude Code
+replays `thinking` blocks whenever extended thinking is on, so a session built on a
+thinking-capable provider 400s the moment it is routed to the gateway.
+
+`stripUnsupportedBlocks()` (`router/lib/models.mjs`) removes `thinking` /
+`redacted_thinking` blocks from a request **on the CodeBuddy leg only**, dropping an
+assistant message that is left with no blocks at all. The fallback leg is left
+untouched (MiniMax, for one, accepts thinking blocks).
 
 ## Picker data flow
 
 ```
 codebuddy2api /v1/models ─┐
                           ├─▶ router GET /v1/models ─▶ gen-picker ─▶ modelPicker.options
-fallback (FALLBACK_MODELS)┘        (merged, live)                    (~/.claude/settings.json)
+fallback   /v1/models    ─┘        (merged, live)                    (~/.claude/settings.json)
 ```
+
+Both catalogs are refreshed every 60 s (and on every `GET /v1/models`). If the fallback
+endpoint is unreachable, its last-known list is kept — seeded from `FALLBACK_MODELS`.
 
 `gen-picker.mjs` rewrites **only** the `modelPicker` block, preserving `env`. It is a
 no-op if the catalog is unreachable or unchanged, so a transient gateway outage never
